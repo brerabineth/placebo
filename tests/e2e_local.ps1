@@ -55,6 +55,7 @@ $jsonRun = & $pwsh -NoProfile -File $dist triage $triCmd --json --out=$fxJson 2>
 $jsonRc = $LASTEXITCODE
 if (-not (Test-Path $fxJson)) {
     Write-Output "  diag: rc=$jsonRc output: $($jsonRun -join ' | ')"
+    & $pwsh -NoProfile -File $dist triage $triCmd --json --out=$fxJson argv 2>&1 | ForEach-Object { Write-Output "  argv: $_" }
 }
 $jraw = [System.IO.File]::ReadAllText($fxJson)
 $j = $jraw | ConvertFrom-Json

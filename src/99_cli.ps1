@@ -39,15 +39,23 @@ function Invoke-PlaceboCli {
             '--help'   { $mode = 'help' }
             '-h'       { $mode = 'help' }
             default {
-                switch -Regex ($a) {
-                    '^--fail-on=(.+)$'    { $failOn = $Matches[1] }
-                    '^--out=(.+)$'        { $outFile = $Matches[1] }
-                    '^--max-depth=(\d+)$' { $maxDepth = [int]$Matches[1] }
-                    '^--profile=(.+)$'    { $profileName = $Matches[1] }
-                    '^--paths?=(.+)$'     { $paths += $Matches[1] }
-                    '^-{1,2}[a-z-]+$'     { Out-Err "unknown option: $a"; return 64 }
-                    default               { $positional += $a }
+                # string-split option parsing: no regex, identical on every platform
+                if ($a.Contains('=')) {
+                    $eq = $a.IndexOf('=')
+                    $k = $a.Substring(0, $eq).ToLowerInvariant()
+                    $v = $a.Substring($eq + 1)
+                    switch ($k) {
+                        '--fail-on'   { $failOn = $v }
+                        '--out'       { $outFile = $v }
+                        '--max-depth' { $maxDepth = [int]$v }
+                        '--profile'   { $profileName = $v }
+                        '--paths'     { $paths += $v }
+                        '--path'      { $paths += $v }
+                        default       { Out-Err "unknown option: $a"; return 64 }
+                    }
                 }
+                elseif ($a.StartsWith('-') -and $a.Length -gt 1) { Out-Err "unknown option: $a"; return 64 }
+                else { $positional += $a }
             }
         }
         $i++

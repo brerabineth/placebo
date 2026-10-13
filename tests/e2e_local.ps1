@@ -78,8 +78,19 @@ Assert-True (@($hj.findings).Count -ge 3) -Name 'hunt findings >= 3 on forged vi
 
 & $pwsh -NoProfile -File $dist hunt --paths=$f1 --fail-on=suspicious | Out-Null
 Assert-True ($LASTEXITCODE -eq 10) -Name 'hunt --fail-on=suspicious trips gate exit 10'
-& $pwsh -NoProfile -File $dist hunt --fail-on=critical | Out-Null
-Assert-True ($LASTEXITCODE -eq 0) -Name 'hunt on clean runner stays under critical gate'
+
+# clean-machine gate check must be isolated from whatever the host/runner really
+# carries in its histories: point HOME/USERPROFILE at an empty dir and skip
+# machine-bound sources (registry/tasks) so the result is deterministic everywhere.
+$cleanHome = Join-Path $work 'cleanhome'
+New-Item -ItemType Directory -Force -Path $cleanHome | Out-Null
+$homeBak = $env:HOME; $upBak = $env:USERPROFILE
+$env:HOME = $cleanHome; $env:USERPROFILE = $cleanHome
+& $pwsh -NoProfile -File $dist hunt --fail-on=critical --no-registry --no-tasks | Out-Null
+$gateRc = $LASTEXITCODE
+if ($null -ne $homeBak) { $env:HOME = $homeBak } else { Remove-Item Env:HOME -ErrorAction SilentlyContinue }
+if ($null -ne $upBak) { $env:USERPROFILE = $upBak } else { Remove-Item Env:USERPROFILE -ErrorAction SilentlyContinue }
+Assert-True ($gateRc -eq 0) -Name 'isolated clean hunt stays under critical gate'
 
 Write-Output '== library + module'
 . $dist

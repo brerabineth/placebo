@@ -18,6 +18,7 @@ function Invoke-PlaceboCli {
     $positional = @()
     $optJson = $false; $optMd = $false; $optReveal = $false; $optNoBanner = $false
     $failOn = ''; $outFile = ''; $maxDepth = 4; $paths = @(); $profileName = 'mixed'
+    $optNoReg = $false; $optNoTasks = $false
 
     $i = 0
     while ($i -lt $ArgsList.Count) {
@@ -33,6 +34,8 @@ function Invoke-PlaceboCli {
             '--md'     { $optMd = $true }
             '--reveal' { $optReveal = $true }
             '--no-banner' { $optNoBanner = $true }
+            '--no-registry' { $optNoReg = $true }
+            '--no-tasks'    { $optNoTasks = $true }
             '--help'   { $mode = 'help' }
             '-h'       { $mode = 'help' }
             default {
@@ -59,7 +62,7 @@ placebo - the fake fix, dissected. static triage for paste-and-run commands.
 usage:
   placebo.ps1 triage '<command>' [--json|--md] [--reveal] [--max-depth=N] [--out=FILE]
   placebo.ps1 triage -                 read command from stdin
-  placebo.ps1 hunt [--paths=DIR] [--json|--md] [--fail-on=BAND]
+  placebo.ps1 hunt [--paths=DIR] [--json|--md] [--fail-on=BAND] [--no-registry] [--no-tasks]
   placebo.ps1 forge --out=DIR --profile=clickfix-basic|clickfix-enc|terminalfix|mixed
   placebo.ps1 rules                    list detection rules
   placebo.ps1 paths                    list hunt target locations on this machine
@@ -113,7 +116,7 @@ static analysis only. the command is never executed. nothing leaves the machine.
                 switch ($report.Verdict) { 'suspicious' { return 1 } 'malicious' { return 2 } 'critical' { return 3 } default { return 0 } }
             }
             'hunt' {
-                $report = Invoke-PlaceboHunt -Paths $paths -MaxDepth $maxDepth -Reveal:$optReveal
+                $report = Invoke-PlaceboHunt -Paths $paths -MaxDepth $maxDepth -Reveal:$optReveal -NoRegistry:$optNoReg -NoTasks:$optNoTasks
                 $text = if ($optJson) { ConvertTo-PlaceboJsonHunt -Report $report }
                         elseif ($optMd) { ConvertTo-PlaceboMarkdown -Report $report -Hunt }
                         else { Format-PlaceboTerminal -Report $report -Hunt -NoBanner:$optNoBanner }
